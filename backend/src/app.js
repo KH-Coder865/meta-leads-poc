@@ -3,6 +3,7 @@ const cors = require("cors");
 require("dotenv").config();
 
 const app = express();
+const metaWebhook = require("./routes/metaWebhook");
 
 app.use(cors());
 app.use(express.json());
@@ -16,6 +17,8 @@ app.get("/", (req, res)=>{
     status: "OK",
   });
 });
+
+app.use("/webhooks/meta", metaWebhook);
 
 app.listen(PORT, ()=>{
   console.log(`Server running on port ${PORT}`);
