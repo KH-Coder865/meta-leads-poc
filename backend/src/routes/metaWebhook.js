@@ -20,7 +20,6 @@ router.get("/", (req, res) => {
   return res.sendStatus(403);
 });
 
-// Verify the Meta signature using the raw request body
 function verifyMetaSignature(req, res, next) {
   const signature = req.get("x-hub-signature-256");
   const appSecret = process.env.META_APP_SECRET;
@@ -74,47 +73,81 @@ router.post("/", verifyMetaSignature, async (req, res) => {
 
         console.log("Received lead notification:", leadId);
 
-        const graphResponse = await fetch(
-          `https://graph.facebook.com/v26.0/${encodeURIComponent(leadId)}?fields=id,created_time,field_data,form_id,ad_id`,
-          {
-            headers: {
-              Authorization: `Bearer ${process.env.META_ACCESS_TOKEN}`,
-            },
-          }
-        );
+        // Handle Meta's synthetic webhook test event
+        if (leadId === "444444444444") {
+          const uniqueId = crypto.randomUUID();
 
-        const lead = await graphResponse.json();
-
-        if (!graphResponse.ok) {
-          console.error("Meta Graph API error:", lead);
-          continue;
-        }
-
-        const fields = {};
-        for (const item of lead.field_data || []) {
-          fields[item.name] = item.values?.[0] ?? null;
-        }
-
-        const { error } = await supabase.from("leads").upsert(
-          {
-            meta_lead_id: lead.id,
-            full_name: fields.full_name || fields.name || null,
-            email: fields.email || null,
-            phone_number: fields.phone_number || fields.phone || null,
-            form_id: lead.form_id || null,
+          const testLead = {
+            meta_lead_id: `webhook_test_${uniqueId}`,
+            full_name: `Meta Test Lead ${new Date().toLocaleTimeString()}`,
+            email: `test_${uniqueId.slice(0, 8)}@example.com`,
+            phone_number: "+91 9876543210",
+            form_id: "webhook_test_form",
             page_id: entry.id || null,
-            created_time: lead.created_time || null,
-            raw_data: lead,
-          },
-          { onConflict: "meta_lead_id", ignoreDuplicates: true }
-        );
+            created_time: new Date().toISOString(),
+            raw_data: {
+              source: "meta_webhook_test",
+              test_lead_id: leadId,
+              generated_id: uniqueId,
+            },
+          };
 
-        if (error) {
-          console.error("Supabase insert error:", error.message);
+          const { error } = await supabase
+            .from("leads")
+            .insert(testLead);
+
+          if (error) {
+            console.error("Test lead insert error:", error.message);
+          } else {
+            console.log("Unique test profile created:", uniqueId);
+          }
+
           continue;
         }
+        else {
 
-        console.log("Lead processed & saved successfully:", lead.id);
+          const graphResponse = await fetch(
+            `https://graph.facebook.com/v26.0/${encodeURIComponent(leadId)}?fields=id,created_time,field_data,form_id,ad_id`,
+            {
+              headers: {
+                Authorization: `Bearer ${process.env.META_ACCESS_TOKEN}`,
+              },
+            }
+          );
+
+          const lead = await graphResponse.json();
+
+          if (!graphResponse.ok) {
+            console.error("Meta Graph API error:", lead);
+            continue;
+          }
+
+          const fields = {};
+          for (const item of lead.field_data || []) {
+            fields[item.name] = item.values?.[0] ?? null;
+          }
+
+          const { error } = await supabase.from("leads").upsert(
+            {
+              meta_lead_id: lead.id,
+              full_name: fields.full_name || fields.name || null,
+              email: fields.email || null,
+              phone_number: fields.phone_number || fields.phone || null,
+              form_id: lead.form_id || null,
+              page_id: entry.id || null,
+              created_time: lead.created_time || null,
+              raw_data: lead,
+            },
+            { onConflict: "meta_lead_id", ignoreDuplicates: true }
+          );
+
+          if (error) {
+            console.error("Supabase insert error:", error.message);
+            continue;
+          }
+
+          console.log("Lead processed & saved successfully:", lead.id);
+        }
       }
     }
   } catch (error) {

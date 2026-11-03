@@ -1,0 +1,315 @@
+# Meta Lead Ads – Real-Time React Native Integration
+
+A proof of concept demonstrating how Facebook (Meta) Lead Ads can be integrated with a React Native mobile application using webhooks, Node.js, Supabase PostgreSQL, and Supabase Realtime.
+
+The objective is to receive lead notifications from Meta, retrieve lead information through the Meta Graph API, store the data in Supabase, and display new leads automatically in an already-open React Native application.
+
+## Features
+
+- **Meta Lead Ads Webhooks:** Express endpoint to receive Meta `leadgen` webhook notifications.
+- **Webhook Verification:** Supports Meta's webhook subscription verification challenge.
+- **Signature Verification:** Validates incoming webhook requests using `X-Hub-Signature-256` and the Meta App Secret.
+- **Lead Retrieval:** Retrieves lead details using the Meta Graph API.
+- **Supabase Integration:** Stores lead information in a PostgreSQL database.
+- **Duplicate Protection:** Uses the Meta Lead ID as a unique identifier.
+- **Real-Time Updates:** Supabase Realtime listens for new database records.
+- **React Native Dashboard:** Displays leads and updates automatically without requiring a manual refresh.
+
+## Architecture
+
+```text
+         Meta Lead Ads
+               |
+               | leadgen webhook
+               v
+       Node.js + Express
+               |
+               | Verify signature
+               v
+        Meta Graph API
+               |
+               | Retrieve lead details
+               v
+        Supabase PostgreSQL
+               |
+               | INSERT event
+               v
+        Supabase Realtime
+               |
+               v
+       React Native App
+               |
+               v
+       Live Leads Dashboard
+```
+
+## Tech Stack
+
+| Component | Technology |
+|---|---|
+| Mobile application | React Native |
+| Mobile development | Expo |
+| Backend | Node.js |
+| API framework | Express.js |
+| Database | Supabase PostgreSQL |
+| Real-time communication | Supabase Realtime |
+| Lead source | Meta Lead Ads |
+| Lead retrieval | Meta Graph API |
+| Webhook tunnelling | ngrok |
+| Language | JavaScript (JSX) |
+
+## Project Structure
+
+```text
+meta-leads-poc/
+│
+├── backend/
+│   ├── src/
+│   │   ├── routes/
+│   │   │   └── metaWebhook.js
+│   │   ├── services/
+│   │   │   └── supabase.js
+│   │   └── app.js
+│   │
+│   ├── .env.example
+│   ├── .gitignore
+│   ├── package-lock.json
+│   └── package.json
+│
+├── mobile/
+│   ├── App.js
+│   ├── supabase.js
+│   ├── .env.example
+│   ├── package.json
+│   ├── index.js
+│   ├── package-lock.json
+│   ├── .gitignore
+│   └── app.json
+│
+└── README.md
+```
+
+## Prerequisites
+
+- Node.js and npm
+- Expo Go installed on a mobile device
+- A Supabase project
+- A Meta Developer account
+- A Facebook Page with a Lead Ads Instant Form
+- Meta Graph API access token with the required lead retrieval permissions
+- ngrok account
+
+## Setup Instructions
+
+### 1. Clone the repository
+
+```bash
+git clone <YOUR_REPOSITORY_URL>
+cd meta-leads-poc
+```
+
+### 2. Configure the Backend
+
+```bash
+cd backend
+npm install
+```
+
+Create a `.env` file in the `backend` directory:
+
+```env
+PORT=5000
+
+SUPABASE_URL=YOUR_SUPABASE_PROJECT_URL
+SUPABASE_SECRET_KEY=YOUR_SUPABASE_SECRET_KEY
+
+META_VERIFY_TOKEN=YOUR_WEBHOOK_VERIFY_TOKEN
+META_APP_SECRET=YOUR_META_APP_SECRET
+META_ACCESS_TOKEN=YOUR_PAGE_ACCESS_TOKEN
+```
+
+**Important:** Never commit `.env` files, access tokens, app secrets, or Supabase secret keys to GitHub.
+
+### 3. Configure Supabase
+
+Create a table named `leads` in the Supabase SQL Editor:
+
+```sql
+CREATE TABLE public.leads (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    meta_lead_id TEXT UNIQUE NOT NULL,
+    full_name TEXT,
+    email TEXT,
+    phone_number TEXT,
+    form_id TEXT,
+    page_id TEXT,
+    created_time TIMESTAMPTZ,
+    raw_data JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+Enable Row Level Security:
+
+```sql
+ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
+```
+
+For this proof of concept, allow the mobile application to read leads:
+
+```sql
+CREATE POLICY "Allow mobile app to read leads"
+ON public.leads
+FOR SELECT
+TO anon, authenticated
+USING (true);
+```
+
+Enable Supabase Realtime for the table:
+
+```sql
+ALTER PUBLICATION supabase_realtime
+ADD TABLE public.leads;
+```
+
+> **Security note:** The public SELECT policy is suitable only for a controlled demo with non-sensitive test data. A production deployment should use authenticated users and appropriately restricted row-level security policies.
+
+### 4. Start the Backend
+
+From the `backend` directory:
+
+```bash
+npm run dev
+```
+
+The backend runs at:
+
+```text
+http://localhost:5000
+```
+
+Check the health endpoint:
+
+```text
+http://localhost:5000/
+```
+
+Expected response:
+
+```json
+{
+  "message": "Meta Lead Ads Backend is running!",
+  "status": "OK"
+}
+```
+
+### 5. Expose the Backend Using ngrok
+
+In a separate terminal:
+
+```bash
+ngrok http 5000
+```
+
+Copy the HTTPS forwarding URL generated by ngrok.
+
+Configure the Meta webhook callback URL as:
+
+```text
+https://YOUR_NGROK_DOMAIN/webhooks/meta
+```
+
+Use the same `META_VERIFY_TOKEN` configured in the backend environment.
+
+In Meta Developer Dashboard:
+
+1. Open Webhooks.
+2. Select the Page object.
+3. Subscribe to the `leadgen` field.
+4. Configure the callback URL and verify token.
+5. Subscribe the Meta app to the relevant Facebook Page's `leadgen` webhook field.
+
+### 6. Configure the React Native Application
+
+Open another terminal:
+
+```bash
+cd mobile
+npm install
+```
+
+Create a `.env` file inside `mobile`:
+
+```env
+EXPO_PUBLIC_SUPABASE_URL=YOUR_SUPABASE_PROJECT_URL
+EXPO_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_PUBLISHABLE_OR_ANON_KEY
+```
+
+The mobile application must use the public Supabase key, never the secret key.
+
+Start Expo:
+
+```bash
+npx expo start
+```
+
+Scan the QR code using Expo Go.
+
+## How the Integration Works
+
+1. A lead is submitted through a Meta Lead Ads Instant Form.
+2. Meta generates a `leadgen` webhook notification.
+3. The Express backend receives the notification.
+4. The backend validates the webhook signature.
+5. The backend extracts the lead ID.
+6. The Meta Graph API is used to retrieve the actual lead details.
+7. The backend inserts the lead into Supabase PostgreSQL.
+8. Supabase Realtime broadcasts the database INSERT event.
+9. The React Native application receives the event.
+10. The dashboard updates its lead list automatically.
+
+The mobile application also fetches previously stored leads when it starts, so the dashboard can display existing records as well as incoming updates.
+
+## Testing
+
+### Backend Health Check
+
+Visit:
+
+```text
+http://localhost:5000/
+```
+
+### Meta Webhook Verification
+
+Meta verifies the webhook using the GET endpoint:
+
+```text
+GET /webhooks/meta
+```
+
+The backend checks the verification token and returns the challenge.
+
+### Meta Webhook Test
+
+Use the Webhooks section of the Meta Developer Dashboard to send a synthetic `leadgen` test notification.
+
+This verifies that:
+
+- The ngrok tunnel is reachable.
+- The webhook endpoint receives the request.
+- Signature validation works.
+- The backend processes the notification.
+
+Meta's dashboard-generated synthetic lead IDs are not actual lead records. Graph API retrieval may therefore fail for those IDs; this is expected.
+
+### Supabase Realtime Test
+
+Insert a test record into `public.leads` using the Supabase SQL Editor.
+
+Keep the React Native dashboard open. The new record should appear automatically when the Realtime subscription is active and the mobile client has permission to read it.
+
+## Author
+
+Developed as a proof of concept for integrating Meta Lead Ads with a real-time React Native application.
+**- By KH-Coder865**
