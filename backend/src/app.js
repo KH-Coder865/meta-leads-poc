@@ -6,7 +6,13 @@ const app = express();
 const metaWebhook = require("./routes/metaWebhook");
 
 app.use(cors());
-app.use(express.json());
+app.use(
+  express.json({
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 
 const PORT = process.env.PORT || 5000;
 
