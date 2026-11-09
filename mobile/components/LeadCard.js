@@ -23,13 +23,14 @@ export default function LeadCard({ lead, index }) {
 const styles = StyleSheet.create({
   container: {
     padding: 12,
-    marginVertical: 5,
+    backgroundColor: "cyan",
+    marginVertical: 9,
     borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 5,
+    borderColor: "black",
+    borderRadius: 29,
   },
   name: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "bold",
     marginBottom: 6,
   },

@@ -91,13 +91,13 @@ export default function App() {
   }, []);
 
   return (
-    <SafeAreaView style={{ flex: 1, padding: 16 }}>
-      <Text style={{ fontSize: 22, fontWeight: "bold" }}>
+    <SafeAreaView style={{marginTop:34, flex: 1, padding: 16, backgroundColor: "pink" }}>
+      <Text style={{ fontSize: 28, fontWeight: "bold" }}>
         Meta Leads Dashboard
       </Text>
 
-      <Text>Connection: {sts}</Text>
-      <Text>Total Leads: {lds.length}</Text>
+      <Text style={{ color: "blue", fontWeight: "bold" }}>Connection: {sts}</Text>
+      <Text style={{ color: "green", fontWeight: "bold" }}>Total Leads: {lds.length}</Text>
 
       {ldg ? (
         <ActivityIndicator size="large" />
